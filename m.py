@@ -18,7 +18,7 @@ booths = []
 
 
 class customer(object):
-
+    global timer
 
     def __init__(self, ident, spending,chance,wait):
         self.ident = ident
@@ -27,6 +27,7 @@ class customer(object):
         self.chance = chance
         self.location = 0
         self.wait = wait
+        self.alpha = random.expovariate(.5)
 
 
 
@@ -44,12 +45,15 @@ class customer(object):
 
     def move(self):
         if self.inqueue == 0:
-            #chance to enter current line
-            if random.random() < self.chance:
-                return True
-            else:
-                self.location += 1
-                return False
+            if self.alpha <= timer:
+                self.alpha = timer + random.expovariate(.5)
+
+                #chance to enter current line
+                if random.random() < self.chance:
+                    return True
+                else:
+                    self.location += 1
+                    return False
         else:
             return False
 
@@ -58,13 +62,12 @@ class booth(object):
     global timer
 
 
-    def __init__(self,location,betarate):
+    def __init__(self,location,br):
         self.location = location
         self.queue = []
         self.sales = 0
-        self.rate = betarate
+        self.rate = br
         self.oalpha = []
-
 
         # time till next serve
         self.beta = random.expovariate(self.rate)
@@ -73,14 +76,14 @@ class booth(object):
 
 
     # adds customer object to queue
-    def addcust(self,customer):
-        self.queue.append(customer)
-        customer.inqueue = 1
+    def addcust(self,cst):
+        self.queue.append(cst)
+        cst.inqueue = 1
 
     # checks to see if served customer
     def update(self):
         if len(self.queue) > 0:
-            # sale occus
+            # sale occurs
             if self.beta <= timer:
                 self.sales += 1
                 self.queue[0].sale()
@@ -88,19 +91,29 @@ class booth(object):
 
 
                 # set next service time
-                self.beta += random.expovariate(self.rate)
+                self.beta = timer + random.expovariate(self.rate)
 
     # had a customer 'visit' so add time to oalpha
     def touch(self):
-        self.oalpha.append(timer)
+        self.oalpha.append(float(timer))
 
 
     # returns avg of times
     def obsalpha(self):
         if len(self.oalpha) == 0:
-            return 0
+            return 0.0
         else:
-            return sum(self.oalpha)/len(self.oalpha)
+            #return len(self.oalpha)
+            s = [self.oalpha[i+1] - self.oalpha[i] for i in range(len(self.oalpha) -1)]
+            if len(s) == 0:
+                return 0.0
+            else:
+                si = sum(s)/len(s)
+                if si == 0:
+                    return 0.0
+                else:
+                    return 1/float(si)
+                #return sum(self.oalpha)/len(self.oalpha)
 
 
 
@@ -108,9 +121,15 @@ class booth(object):
 
 
 def inittrial(spending, chance, wait, betarate):
-    global ct
+    global ct, timer
     global cust, active, booths
 
+
+
+    timer = 0
+    cust = []
+    active = []
+    booths = []
 
     # rate at customers appear to booth 0
     # beta alpha rates would be say 1/rate so 
@@ -124,7 +143,7 @@ def inittrial(spending, chance, wait, betarate):
     #makes times, this is same as # of customers
     ct = []
     t = 0
-    for x in range(1000):
+    for x in range(100000):
         t+= random.expovariate(alpha)
         ct.append(t)
 
@@ -135,13 +154,8 @@ def inittrial(spending, chance, wait, betarate):
     for x in range(1000):
         cust.append(customer(x,spending,chance,wait))
 
-    for x in range(maxbooth):
+    for x in range(100):
         booths.append(booth(x,betarate))
-        
-    print("making",len(booths),len(cust))
-
-    # no active customers right now
-    active = []
 
 
 
@@ -149,7 +163,8 @@ def inittrial(spending, chance, wait, betarate):
 
 
 def trial():
-    global timer, ct
+    global timer, ct, booths, cust, active
+    timer = 0    
 
 
     ci = 0
@@ -175,9 +190,8 @@ def trial():
         for idx,c in enumerate(active):
             if c.location >= 100:
                 removals.append(idx)
-                continue
 
-            if c.inqueue == 0:
+            elif c.inqueue == 0:
 
                 booths[c.location].touch()
 
@@ -186,10 +200,13 @@ def trial():
                     # booth has shorter line 
                     if len(booths[i].queue) < c.wait:
                         booths[i].addcust(c)
+                        removals.append(idx)
                     # else cust moves on
                     else:
                         c.location += 1
 
+            else:
+                pass
 
         for x in sorted(removals,reverse=True):
             active.pop(x)
@@ -200,25 +217,41 @@ def trial():
 
 
 total_sales = 0
-trial_amt = 100
+trial_amt = 5
 
 avg = [0] * 100
+bavg = [0] * 100
 
-for brate in [.01,.05,.1,.5]:
-    for x in range(trial_amt):
+fig1 = plt.figure()
+ax1 = plt.subplot(111)
+fig2 = plt.figure()
+ax2 = plt.subplot(111)
+
+tim = 0
+for brate in [.01,.02,.03,.04,.05]:
+
+
+    for tamt in range(trial_amt):
 
 
         # (# of times to spend, chance to spend, will pass if this many in queue, booth beta)
-        inittrial(1,.1,1000,brate)
+        inittrial(1,.1,1,brate)
+
+
+        s = [ct[i+1] - ct[i] for i in range(len(ct) -1)]
+        s = sum(s) / len(s)
+
+        tim = 1/s
+
         trial()
 
         for b in booths:
 
-            avg[b.location]+=b.obsalpha()
-#            avg[b.location]+=b.sales
+            bavg[b.location]+= float(b.obsalpha())
+            print b.location, b.obsalpha()
+            avg[b.location]+=b.sales
 
 
-            total_sales+=b.sales
 
 
         
@@ -232,37 +265,45 @@ for brate in [.01,.05,.1,.5]:
 
 
 
-    for i,x in enumerate(avg):
-        avg[i] = x/trial_amt
-        print(x, x/trial_amt)
+    for a,b in enumerate(avg):
+        avg[a] = b/trial_amt
 
+    for c,d in enumerate(bavg):
+        bavg[c] = d/trial_amt
+        
 
     x = []
     for i in range(100):
         x.append(i)
 
+    ax1.plot(x,avg,label=brate)
 
+    ax2.plot(x,bavg,label=brate)
 
-    plt.plot(x,avg)
+    avg = [0] * 100
+    bavg = [0] * 100
 
-
+t = [0]* 100
+for i in range(100):
+    t[i] = tim
 x = []
 for i in range(100):
     x.append(i)
 
 
-#makes times, this is same as # of customers
-ct = []
-t = 0
-for d in range(1000):
-    t+= random.expovariate(.5)
-    ct.append(t)
-    print t
-
-for i in range(100):
-    avg[i]=sum(ct)/len(ct)
-
-plt.plot(x,avg)
+tim = 0
+ax2.plot(x,t,label='base alpha')
 
 
-plt.show()
+plt.figure(fig1.number)
+plt.legend(loc='upper right')
+fig1.savefig('avg-wait1000.png')
+
+
+plt.figure(fig2.number)
+plt.legend(loc='upper right')
+fig2.savefig('bavg-wait123.png')
+
+
+
+
