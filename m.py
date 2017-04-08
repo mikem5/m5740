@@ -5,6 +5,18 @@ import matplotlib.pyplot as plt
 
 
 
+# global timer
+timer = 0
+maxbooth = 100
+
+
+ct = []
+cust = []
+active = []
+booths = []
+
+
+
 class customer(object):
 
 
@@ -15,16 +27,6 @@ class customer(object):
         self.chance = chance
         self.location = 0
         self.wait = wait
-
-    def reset(self,idnet,spending,chance,wait):
-        self.inqueue = 0
-        self.chance = chance
-        self.location = 0
-        self.ident = ident
-        self.spending = spending
-        self.wait = wait 
-
-
 
 
 
@@ -53,22 +55,19 @@ class customer(object):
 
 
 class booth(object):
+    global timer
+
 
     def __init__(self,location,betarate):
         self.location = location
         self.queue = []
         self.sales = 0
         self.rate = betarate
+        self.oalpha = []
+
+
         # time till next serve
         self.beta = random.expovariate(self.rate)
-
-
-    def reset(self):
-        self.queue = []
-        self.sales = 0
-        self.rate = 1
-        self.beta = random.expovariate(self.rate)
-
 
 
 
@@ -91,19 +90,22 @@ class booth(object):
                 # set next service time
                 self.beta += random.expovariate(self.rate)
 
+    # had a customer 'visit' so add time to oalpha
+    def touch(self):
+        self.oalpha.append(timer)
 
 
-# global timer
-timer = 0
-maxbooth = 100
+    # returns avg of times
+    def obsalpha(self):
+        if len(self.oalpha) == 0:
+            return 0
+        else:
+            return sum(self.oalpha)/len(self.oalpha)
 
 
 
-#globasls
-ct = []
-cust = []
-active = []
-booths = []
+
+
 
 def inittrial(spending, chance, wait, betarate):
     global ct
@@ -146,26 +148,25 @@ def inittrial(spending, chance, wait, betarate):
 # increment time -> move customers -> update booths
 
 
-
 def trial():
-    global timer
-    print("making",len(booths),len(cust))
+    global timer, ct
 
 
+    ci = 0
     while(len(cust)>0 or len(active)>0):
-
-        timer +=1
 
 
 
         for b in booths:
             b.update()
 
-        if timer >= ct[0]:
+        if timer >= ci:
             if len(cust) > 0:
                 # remove first cust object and put in active list
                 active.append(cust.pop(0))
 
+            if len(ct) > 0:
+                ci = ct.pop(0)
 
 
 
@@ -175,7 +176,11 @@ def trial():
             if c.location >= 100:
                 removals.append(idx)
                 continue
+
             if c.inqueue == 0:
+
+                booths[c.location].touch()
+
                 if c.move() == True:
                     i = c.location
                     # booth has shorter line 
@@ -183,14 +188,14 @@ def trial():
                         booths[i].addcust(c)
                     # else cust moves on
                     else:
-#                        print(len(booths[i].queue))
-#                        time.sleep(.01)
                         c.location += 1
+
 
         for x in sorted(removals,reverse=True):
             active.pop(x)
 
 
+        timer +=1
 
 
 
@@ -199,22 +204,27 @@ trial_amt = 100
 
 avg = [0] * 100
 
-for brate in [.01,.025,.05,.075,.1]:
+for brate in [.01,.05,.1,.5]:
     for x in range(trial_amt):
+
+
         # (# of times to spend, chance to spend, will pass if this many in queue, booth beta)
-        inittrial(1,.1,3,brate)
+        inittrial(1,.1,1000,brate)
         trial()
 
-        # global timer
+        for b in booths:
+
+            avg[b.location]+=b.obsalpha()
+#            avg[b.location]+=b.sales
+
+
+            total_sales+=b.sales
+
+
+        
+        #reset
         timer = 0
         maxbooth = 100
-
-
-
-        for b in booths:
-            avg[b.location]+=b.sales
-            total_sales+=b.sales
-        #globasls
         ct = []
         cust = []
         active = []
@@ -234,5 +244,25 @@ for brate in [.01,.025,.05,.075,.1]:
 
 
     plt.plot(x,avg)
+
+
+x = []
+for i in range(100):
+    x.append(i)
+
+
+#makes times, this is same as # of customers
+ct = []
+t = 0
+for d in range(1000):
+    t+= random.expovariate(.5)
+    ct.append(t)
+    print t
+
+for i in range(100):
+    avg[i]=sum(ct)/len(ct)
+
+plt.plot(x,avg)
+
 
 plt.show()
