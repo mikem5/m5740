@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 
 # global timer
-timer = 0
+timer = 0.0
 maxbooth = 100
 
 
@@ -48,6 +48,9 @@ class customer(object):
             if self.alpha <= timer:
                 self.alpha = timer + random.expovariate(.5)
 
+                booths[self.location].touch()
+
+
                 #chance to enter current line
                 if random.random() < self.chance:
                     return True
@@ -65,9 +68,9 @@ class booth(object):
     def __init__(self,location,br):
         self.location = location
         self.queue = []
-        self.sales = 0
+        self.sales = 0.0
         self.rate = br
-        self.oalpha = []
+        self.oalpha = [0]
 
         # time till next serve
         self.beta = random.expovariate(self.rate)
@@ -103,17 +106,15 @@ class booth(object):
         if len(self.oalpha) == 0:
             return 0.0
         else:
-            #return len(self.oalpha)
             s = [self.oalpha[i+1] - self.oalpha[i] for i in range(len(self.oalpha) -1)]
             if len(s) == 0:
-                return 0.0
+                return float(0.0)
             else:
                 si = sum(s)/len(s)
                 if si == 0:
-                    return 0.0
+                    return float(0.0)
                 else:
                     return 1/float(si)
-                #return sum(self.oalpha)/len(self.oalpha)
 
 
 
@@ -126,7 +127,7 @@ def inittrial(spending, chance, wait, betarate):
 
 
 
-    timer = 0
+    timer = 0.0
     cust = []
     active = []
     booths = []
@@ -164,7 +165,7 @@ def inittrial(spending, chance, wait, betarate):
 
 def trial():
     global timer, ct, booths, cust, active
-    timer = 0    
+    timer = 0.0
 
 
     ci = 0
@@ -193,15 +194,19 @@ def trial():
 
             elif c.inqueue == 0:
 
-                booths[c.location].touch()
 
                 if c.move() == True:
+
                     i = c.location
+
                     # booth has shorter line 
                     if len(booths[i].queue) < c.wait:
                         booths[i].addcust(c)
                         removals.append(idx)
+
+
                     # else cust moves on
+
                     else:
                         c.location += 1
 
@@ -217,7 +222,7 @@ def trial():
 
 
 total_sales = 0
-trial_amt = 5
+trial_amt = 100
 
 avg = [0] * 100
 bavg = [0] * 100
@@ -235,7 +240,7 @@ for brate in [.01,.02,.03,.04,.05]:
 
 
         # (# of times to spend, chance to spend, will pass if this many in queue, booth beta)
-        inittrial(1,.1,1,brate)
+        inittrial(1,.1,5,brate)
 
 
         s = [ct[i+1] - ct[i] for i in range(len(ct) -1)]
@@ -247,8 +252,7 @@ for brate in [.01,.02,.03,.04,.05]:
 
         for b in booths:
 
-            bavg[b.location]+= float(b.obsalpha())
-            print b.location, b.obsalpha()
+            bavg[b.location]+= b.obsalpha()
             avg[b.location]+=b.sales
 
 
@@ -297,12 +301,12 @@ ax2.plot(x,t,label='base alpha')
 
 plt.figure(fig1.number)
 plt.legend(loc='upper right')
-fig1.savefig('avg-wait1000.png')
+fig1.savefig('avg-wait1.png')
 
 
 plt.figure(fig2.number)
 plt.legend(loc='upper right')
-fig2.savefig('bavg-wait123.png')
+fig2.savefig('bavg-wait1.png')
 
 
 
