@@ -4,10 +4,13 @@ import time
 import matplotlib.pyplot as plt
 
 
-
 # global timer
 timer = 0.0
 maxbooth = 100
+
+# = 2
+alpha = .5
+
 
 
 ct = []
@@ -18,7 +21,7 @@ booths = []
 
 
 class customer(object):
-    global timer
+    global timer,alpha
 
     def __init__(self, ident, spending,chance,wait):
         self.ident = ident
@@ -27,7 +30,7 @@ class customer(object):
         self.chance = chance
         self.location = 0
         self.wait = wait
-        self.alpha = random.expovariate(.5)
+        self.alpha = random.expovariate(alpha)
 
 
 
@@ -45,18 +48,26 @@ class customer(object):
 
     def move(self):
         if self.inqueue == 0:
-            if self.alpha <= timer:
-                self.alpha = timer + random.expovariate(.5)
-
-                booths[self.location].touch()
-
-
+            if self.alpha <= timer and self.location > 0:
+                self.alpha = timer + random.expovariate(alpha)
                 #chance to enter current line
                 if random.random() < self.chance:
-                    return True
+
+                   booths[self.location].touch()
+                   return True
                 else:
                     self.location += 1
                     return False
+            elif self.location == 0:
+                #chance to enter current line
+                if random.random() < self.chance:
+
+                   booths[self.location].touch()
+                   return True
+                else:
+                    self.location += 1
+                    return False
+ 
         else:
             return False
 
@@ -71,6 +82,8 @@ class booth(object):
         self.sales = 0.0
         self.rate = br
         self.oalpha = [0]
+        self.lostcust = 0
+
 
         # time till next serve
         self.beta = random.expovariate(self.rate)
@@ -136,8 +149,6 @@ def inittrial(spending, chance, wait, betarate):
     # beta alpha rates would be say 1/rate so 
     # for .5 = 2 = lambda or .1 = 10
     # this means avg is 10 'time units' till next event
-    alpha = .5
-
 
 
 
@@ -200,7 +211,8 @@ def trial():
                     i = c.location
 
                     # booth has shorter line 
-                    if len(booths[i].queue) < c.wait:
+                    if len(booths[i].queue) <= c.wait:
+
                         booths[i].addcust(c)
                         removals.append(idx)
 
@@ -209,7 +221,7 @@ def trial():
 
                     else:
                         c.location += 1
-
+                        booths[i].lostcust +=1
             else:
                 pass
 
@@ -222,25 +234,30 @@ def trial():
 
 
 total_sales = 0
-trial_amt = 100
+trial_amt = 50
 
 avg = [0] * 100
 bavg = [0] * 100
+lost = [0] * 100
 
 fig1 = plt.figure()
 ax1 = plt.subplot(111)
 fig2 = plt.figure()
 ax2 = plt.subplot(111)
+fig3 = plt.figure()
+ax3 = plt.subplot(111)
+
 
 tim = 0
-for brate in [.01,.02,.03,.04,.05]:
+for brate in [.1,.06,.05,.03,]:
+
 
 
     for tamt in range(trial_amt):
 
 
         # (# of times to spend, chance to spend, will pass if this many in queue, booth beta)
-        inittrial(1,.1,5,brate)
+        inittrial(1,.1,1,brate)
 
 
         s = [ct[i+1] - ct[i] for i in range(len(ct) -1)]
@@ -254,7 +271,7 @@ for brate in [.01,.02,.03,.04,.05]:
 
             bavg[b.location]+= b.obsalpha()
             avg[b.location]+=b.sales
-
+            lost[b.location]+=b.lostcust
 
 
 
@@ -275,7 +292,9 @@ for brate in [.01,.02,.03,.04,.05]:
     for c,d in enumerate(bavg):
         bavg[c] = d/trial_amt
         
-
+    for c,d in enumerate(lost):
+        lost[c] = d/trial_amt
+ 
     x = []
     for i in range(100):
         x.append(i)
@@ -283,9 +302,13 @@ for brate in [.01,.02,.03,.04,.05]:
     ax1.plot(x,avg,label=brate)
 
     ax2.plot(x,bavg,label=brate)
+    ax3.plot(x,lost,label=brate)
+
 
     avg = [0] * 100
     bavg = [0] * 100
+    lost = [0]*100
+
 
 t = [0]* 100
 for i in range(100):
@@ -296,7 +319,7 @@ for i in range(100):
 
 
 tim = 0
-ax2.plot(x,t,label='base alpha')
+#ax2.plot(x,t,label='base alpha')
 
 
 plt.figure(fig1.number)
@@ -307,6 +330,10 @@ fig1.savefig('avg-wait1.png')
 plt.figure(fig2.number)
 plt.legend(loc='upper right')
 fig2.savefig('bavg-wait1.png')
+
+plt.figure(fig3.number)
+plt.legend(loc='upper right')
+fig3.savefig('lost-wait1.png')
 
 
 
