@@ -11,6 +11,7 @@ timer = 0
 maxbooth = 100
 
 # = a / .1
+# 2 = every 2 minutes alpha = 30 per hour
 alpha = 2
 
 
@@ -27,13 +28,18 @@ def comloc(loc):
 class customer(object):
     global timer,alpha
 
-    def __init__(self, ident, spending,chance,wait):
+    def __init__(self, ident, spending,chance,wait,cash):
         self.ident = ident
         self.spending = spending
+        if cash == 1:
+            self.cash = np.random.randint(100)
+        else:
+            self.cash = 0
         self.inqueue = 0
         self.chance = chance
 
-        start_row = np.random.randint(9)
+        #start_row = np.random.randint(9)
+        start_row = 0
         self.location = [start_row,0]
         self.wait = wait
         self.alpha = np.random.poisson(alpha)
@@ -44,19 +50,31 @@ class customer(object):
     def check(self):
         return self.location, self.spending, self.inqueue
 
-    def sale(self):
-        self.spending -= 1
-        self.inqueue = 0
-        if self.spending > 0:
-            self.location_move()
-        # left
+    def sale(self,cost):
+        if cost >0:
+            self.cash -= cost
+
+            self.inqueue = 0
+            if self.cash > 0:
+                self.location_move()
+            else:
+                self.location = [100,100]
+
         else:
-            self.location = [100,100]
+            self.spending -= 1
+            self.inqueue = 0
+            if self.spending > 0:
+                self.location_move()
+            # left
+            else:
+                self.location = [100,100]
 
 
 
     def location_move(self):
-        if self.location[1] == 9:
+
+        # used for row switching
+        if False: #self.location[1] == False:
             if len(self.used_rows) >= 10 :
                 self.location = [10,10]
             else:
@@ -67,31 +85,61 @@ class customer(object):
                 self.location[0] = row
                 self.location[1] = 0
 
-        #if self.location[1] == 9:
-        #    self.location[0] += 1
-        #    self.location[1] = 0
+        # normal linear moves
+        if self.location[1] == 9:
+            self.location[0] += 1
+            self.location[1] = 0
         else:
             self.location[1]+=1
  
 
+
+
+    def can_buy(self, cost):
+        if cost < self.cash:
+            return True
+        else:
+            return False
+
+
+
     def move(self):
         if self.inqueue == 0:
-            #if timer >= self.alpha and self.location > [0,0]:
-            #    self.alpha = timer + np.random.poisson(alpha)
-                #chance to enter current line
-            #    if random.random() <= self.chance * booths[self.location[0] + self.location[1]].hotness:
-            #       return True
-            #    else:
-            #        self.location_move() 
-            #        return False
-            #else: #self.location == [0,0]:
-                #chance to enter current line
-            if np.random.rand() <= self.chance * booths[comloc(self.location)].hotness:
-#                print comloc(self.location)
-                return True
+
+
+            # with a queue/wait
+            if True:
+                if timer >= self.alpha and comloc(self.location) > 0:
+                    self.alpha = timer + np.random.poisson(alpha)
+                    #chance to enter current line
+                    if np.random.rand() <= self.chance * booths[comloc(self.location)].hotness:
+                       return True
+                    else:
+                        self.location_move() 
+                        return False
+                elif self.location == [0,0]:
+                    #chance to enter current line
+                    self.alpha = timer + np.random.poisson(alpha)
+                    #chance to enter current line
+                    if np.random.rand() <= self.chance * booths[comloc(self.location)].hotness:
+                       return True
+                    else:
+                        self.location_move() 
+                        return False
+                else:
+                    return False
+
+
+            # non queueing
             else:
-                self.location_move() 
-                return False
+
+
+                if np.random.rand() <= self.chance * booths[comloc(self.location)].hotness:
+    #                print comloc(self.location)
+                    return True
+                else:
+                    self.location_move() 
+                    return False
 
         else:
             return False
@@ -109,18 +157,21 @@ class booth(object):
         self.oalpha = [0]
         self.lostcust = 0
 
+        self.cost = np.random.randint(100)
+
+
         # probability mixing with customer probability,
         # base chance of attracting a customer
         #
         # can change distribution for testing?
-#        self.hotness = 1
+        self.hotness = 1
         #self.hotness  = np.random.uniform()
-        self.hotness = abs(np.random.normal(0,.1))
+        #self.hotness = abs(np.random.normal(0,.1))
         #self.hotness = np.random.exponential(scale=.1)
 
 
         # time till next serve
-#        self.beta = np.random.poisson(self.rate)
+        self.beta = np.random.poisson(self.rate)
         self.beta = 0
 
 
@@ -133,10 +184,11 @@ class booth(object):
     # checks to see if served customer
     def update(self):
         if len(self.queue) > 0:
+
             # sale occurs
-            if timer >= 0: #self.beta:
+            if timer >= self.beta:
                 self.sales += 1
-                self.queue[0].sale()
+                self.queue[0].sale(0)
                 self.queue.pop(0)
 
 
@@ -184,9 +236,9 @@ def inittrial(spending, chance, wait, betarate):
 
 
     #make customers
-    # customers are formed as cust[[booth location, times to spend], etc]
+    # customers are formed as cust[[booth location, times to spend], use cash, etc]
     for x in range(1000):
-        cust.append(customer(x,spending,chance,wait))
+        cust.append(customer(x,spending,chance,wait,0))
 
     for x in range(10):
         for y in range(10):
@@ -235,18 +287,27 @@ def trial():
 
                     i = comloc(c.location)
                     # booth has shorter line 
-                    # just ignore queue for now
-                    #if len(booths[i].queue) >= 0:
                     if True:
+                        if len(booths[i].queue) < c.wait:
+                            booths[i].addcust(c)
+                            removals.append(idx)
+                            booths[i].touch()
+                      
+                        # else cust moves on
+
+                        else:
+                            c.location_move()
+                            booths[i].lostcust +=1
+
+
+                    else:
                         booths[i].addcust(c)
                         removals.append(idx)
                         booths[i].touch()
                   
-                    # else cust moves on
 
-                    else:
-                        c.location_move()
-                        booths[i].lostcust +=1
+
+
             else:
                 pass
 
@@ -265,11 +326,11 @@ def trial():
 
 
 
-    for i in range(10):
-        for b in booths:
-            b.update()
+for i in range(1000):
+    for b in booths:
+        b.update()
 
-        timer +=1
+    timer +=1
 
 
 
@@ -278,7 +339,7 @@ total_sales = 0
 
 
 # total amount of trials we run
-trial_amt = 1000
+trial_amt = 50
 
 avg = [0] * 100
 bavg = [0] * 100
@@ -296,14 +357,15 @@ tim = 0
 
 b1 = []
 
-
-for var in [.1,.2,.3,.4,.5]:
+# per hour
+# 
+for var in [5,10,30,50,100]:
 
     for tamt in range(trial_amt):
 
 
         # (# of times to spend, chance to spend, will pass if this many in queue, booth beta)
-        inittrial(1,var,1,1)
+        inittrial(1,1,1,var)
 
 
 #        s = [ct[i+1] - ct[i] for i in range(len(ct) -1)]
@@ -354,6 +416,13 @@ for var in [.1,.2,.3,.4,.5]:
     ax2.plot(x,bavg,label=var)
     ax3.plot(x,lost,label=var)
 
+    print "beta rate of: {}".format(var)
+    print "x, avg, lamb_avg"
+    for i in range(100):
+        print "{}, {}, {}".format(i, avg[i],bavg[i])
+
+    print"\n\n"
+
 
     avg = [0] * 100
     bavg = [0] * 100
@@ -364,6 +433,16 @@ x = []
 for i in range(100):
     x.append(i)
 
+
+
+ax1.set_xlabel("Booth")
+ax1.set_ylabel("Average sales")
+ax1.set_title("Wait model total sales per booth, vary $\mu$ values")
+
+
+ax2.set_xlabel("Booth")
+ax2.set_ylabel("Average incoming $\lambda$")
+ax2.set_title("Wait model observed $\mu$, vary $\mu$ values")
 
 
 plt.figure(fig1.number)
@@ -378,6 +457,7 @@ fig2.savefig('bavg-wait1.png')
 plt.figure(fig3.number)
 plt.legend(loc='upper right')
 fig3.savefig('lost-wait1.png')
+
 
 
 
