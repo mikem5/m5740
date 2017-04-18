@@ -96,10 +96,13 @@ class customer(object):
 
 
     def can_buy(self, cost):
-        if cost < self.cash:
-            return True
-        else:
-            return False
+        if cost <= self.cash:
+            if cost > 0:
+                # gives more incentive to buy expensive items
+                if np.random.rand() >= 1/cost:
+                    return True
+                
+        return False
 
 
 
@@ -149,7 +152,7 @@ class booth(object):
     global timer
 
 
-    def __init__(self,location,br):
+    def __init__(self,location,br,cost):
         self.location = location
         self.queue = []
         self.sales = 0
@@ -157,8 +160,10 @@ class booth(object):
         self.oalpha = [0]
         self.lostcust = 0
 
-        self.cost = np.random.randint(100)
-
+        if cost > 0:
+            self.cost = np.random.randint(100)
+        else:
+            self.cost = 0
 
         # probability mixing with customer probability,
         # base chance of attracting a customer
@@ -188,7 +193,7 @@ class booth(object):
             # sale occurs
             if timer >= self.beta:
                 self.sales += 1
-                self.queue[0].sale(0)
+                self.queue[0].sale(self.cost)
                 self.queue.pop(0)
 
 
@@ -223,7 +228,7 @@ class booth(object):
 
 
 
-def inittrial(spending, chance, wait, betarate):
+def inittrial(spending, chance, wait, betarate,cash):
     global timer
     global cust, active, booths
 
@@ -238,11 +243,12 @@ def inittrial(spending, chance, wait, betarate):
     #make customers
     # customers are formed as cust[[booth location, times to spend], use cash, etc]
     for x in range(1000):
-        cust.append(customer(x,spending,chance,wait,0))
+        cust.append(customer(x,spending,chance,wait,cash))
 
     for x in range(10):
         for y in range(10):
-            booths.append(booth([x,y],betarate))
+            booths.append(booth([x,y],betarate,cash))
+            
 
 
 
@@ -288,11 +294,19 @@ def trial():
                     i = comloc(c.location)
                     # booth has shorter line 
                     if True:
-                        if len(booths[i].queue) < c.wait:
-                            booths[i].addcust(c)
-                            removals.append(idx)
-                            booths[i].touch()
-                      
+                        if len(booths[i].queue) < 100000: #c.wait:
+                            if c.can_buy(booths[i].cost) == True:
+                                booths[i].addcust(c)
+                                booths[i].touch()
+                          
+                            else:
+                                c.location_move()
+                                booths[i].lostcust +=1
+
+
+
+
+
                         # else cust moves on
 
                         else:
@@ -339,7 +353,7 @@ total_sales = 0
 
 
 # total amount of trials we run
-trial_amt = 50
+trial_amt = 1000
 
 avg = [0] * 100
 bavg = [0] * 100
@@ -359,13 +373,13 @@ b1 = []
 
 # per hour
 # 
-for var in [5,10,30,50,100]:
+for var in [.1,.2,.3,.4,.5]:
 
     for tamt in range(trial_amt):
 
 
         # (# of times to spend, chance to spend, will pass if this many in queue, booth beta)
-        inittrial(1,1,1,var)
+        inittrial(1,var,1,1,1)
 
 
 #        s = [ct[i+1] - ct[i] for i in range(len(ct) -1)]
@@ -378,7 +392,11 @@ for var in [5,10,30,50,100]:
         for b in booths:
 
             bavg[comloc(b.location)]+= b.obsalpha()
-            avg[comloc(b.location)]+=b.sales
+            if b.cost > 0:
+                avg[comloc(b.location)]+=b.sales*b.cost
+            else:
+                avg[comloc(b.location)]+=b.sales
+ 
             lost[comloc(b.location)]+=b.lostcust
 
 
@@ -437,12 +455,13 @@ for i in range(100):
 
 ax1.set_xlabel("Booth")
 ax1.set_ylabel("Average sales")
-ax1.set_title("Wait model total sales per booth, vary $\mu$ values")
+ax1.set_title("Uniform cash,cost distribution, $\\frac{1}{cost}$ desire, vary $p$ values")
 
 
 ax2.set_xlabel("Booth")
 ax2.set_ylabel("Average incoming $\lambda$")
-ax2.set_title("Wait model observed $\mu$, vary $\mu$ values")
+ax1.set_title("Uniform cash,cost distribution, $\\frac{1}{cost}$ desire, vary $p$ values")
+
 
 
 plt.figure(fig1.number)
